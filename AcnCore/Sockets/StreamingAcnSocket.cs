@@ -12,35 +12,61 @@ using System.Collections.ObjectModel;
 
 namespace Acn.Sockets
 {
-    public class StreamingAcnSocket:AcnSocket, IProtocolFilter
+    public class StreamingAcnSocket : AcnSocket, IProtocolFilter
     {
         public event EventHandler<NewPacketEventArgs<StreamingAcnDmxPacket>> NewPacket;
 
         #region Setup and Initialisation
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StreamingAcnSocket"/> which will multicast using standardized ports and addresses.
+        /// </summary>
+        /// <param name="sourceId">A <see cref="Guid"/> representing this source.</param>
+        /// <param name="sourceName">A descriptive name for this endpoint.</param>
         public StreamingAcnSocket(Guid sourceId, string sourceName)
+            : this(sourceId, sourceName, IPAddress.None)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StreamingAcnSocket"/> which will unicast to a specified <see cref="IPAddress"/> on the standard ACN-SDT multicast port (5568).
+        /// </summary>
+        /// <param name="sourceId">A <see cref="Guid"/> representing this source.</param>
+        /// <param name="sourceName">A descriptive name for this endpoint.</param>
+        /// <param name="unicastDestination">The <see cref="IPAddress"/> of a remote endpoint to which packets should be directly sent.</param>
+        public StreamingAcnSocket(Guid sourceId, string sourceName, IPAddress unicastDestination)
+            : this(sourceId, sourceName, unicastDestination == IPAddress.None || unicastDestination == null ? null : new IPEndPoint(unicastDestination, 5568))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StreamingAcnSocket"/> which will unicast to a specified <see cref="IPEndPoint"/>. The port may be the standard ACN-SDT multicast port, or any valid port number.
+        /// </summary>
+        /// <param name="sourceId">A <see cref="Guid"/> representing this source.</param>
+        /// <param name="sourceName">A descriptive name for this endpoint.</param>
+        /// <param name="unicastDestination">The <see cref="IPEndpoint"/> to which packets should be directly sent.</param>
+        public StreamingAcnSocket(Guid sourceId, string sourceName, IPEndPoint unicastDestination)
             : base(sourceId)
         {
+            UnicastDestination = unicastDestination;
             if (sourceName.Length > 64)
                 throw new ArgumentException("The source name must be no longer than 64 characters.");
 
             SourceName = sourceName;
             RegisterProtocolFilter(this);
         }
-
         #endregion
 
         #region Information
 
         public string SourceName { get; protected set; }
 
-        private Dictionary<int,int> sequenceNumber = new Dictionary<int,int>();
+        private Dictionary<int, int> sequenceNumber = new Dictionary<int, int>();
 
         public int GetSequenceNumber(int universe)
         {
             int value = 0;
-            sequenceNumber.TryGetValue(universe,out value);
-            return value; 
+            sequenceNumber.TryGetValue(universe, out value);
+            return value;
         }
 
         public void IncrementSequenceNumber(int universe)
@@ -48,8 +74,8 @@ namespace Acn.Sockets
             int value = 0;
             sequenceNumber.TryGetValue(universe, out value);
 
-            value = (value >=255 ? 0 : value + 1);
-                
+            value = (value >= 255 ? 0 : value + 1);
+
             sequenceNumber[universe] = value;
         }
 
@@ -64,6 +90,8 @@ namespace Acn.Sockets
         {
             get { return dmxUniverses.AsReadOnly(); }
         }
+
+        private IPEndPoint UnicastDestination { get; set; }
 
         public static IPAddress GetUniverseAddress(int universe)
         {
@@ -90,10 +118,10 @@ namespace Acn.Sockets
         public void JoinDmxUniverse(int universe)
         {
             if (dmxUniverses.Contains(universe))
-                throw new InvalidOperationException(string.Format("You have already joined the Dmx Universe {0}.",universe));
+                throw new InvalidOperationException(string.Format("You have already joined the Dmx Universe {0}.", universe));
 
             //Join Group
-            SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, new MulticastOption(GetUniverseAddress(universe),((IPEndPoint) LocalEndPoint).Address));
+            SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, new MulticastOption(GetUniverseAddress(universe), ((IPEndPoint)LocalEndPoint).Address));
 
             //Add to the list of universes we have joined.
             dmxUniverses.Add(universe);
@@ -151,12 +179,12 @@ namespace Acn.Sockets
             packet.Dmx.StartCode = startCode;
             packet.Dmx.Data = dmxData;
 
-            SendPacket(packet, GetUniverseEndPoint(universe));
+            SendPacket(packet, UnicastDestination ?? GetUniverseEndPoint(universe));
         }
 
         protected virtual void RaiseNewPacket(IPEndPoint source, StreamingAcnDmxPacket newPacket)
         {
-            if(NewPacket != null)
+            if (NewPacket != null)
                 NewPacket(this, new NewPacketEventArgs<StreamingAcnDmxPacket>(source, newPacket));
         }
 
@@ -166,7 +194,7 @@ namespace Acn.Sockets
 
         public int ProtocolId
         {
-            get { return (int) ProtocolIds.sACN; }
+            get { return (int)ProtocolIds.sACN; }
         }
 
         public void ProcessPacket(IPEndPoint source, AcnRootLayer header, AcnBinaryReader data)
