@@ -367,7 +367,7 @@ namespace Acn.Sntp
                                                  NTPData[offReferenceID + 3].ToString();
                                 try
                                 {
-                                    IPHostEntry Host = Dns.GetHostByAddress(Address);
+                                    IPHostEntry Host = Dns.GetHostEntry(Address);
                                     val = Host.HostName + " (" + Address + ")";
                                 }
                                 catch (Exception)
@@ -376,10 +376,8 @@ namespace Acn.Sntp
                                 }
                                 break;
                             case 4: // Version 4, Reference ID is the timestamp of last update
-                                DateTime time = ComputeDate(GetMilliSeconds(offReferenceID));
-                                // Take care of the time zone
-                                TimeSpan offspan = TimeZone.CurrentTimeZone.GetUtcOffset(DateTime.Now);
-                                val = (time + offspan).ToString();
+                                DateTime time = ComputeDate(GetMilliSeconds(offReferenceID), DateTimeKind.Utc);
+                                val = (time.ToLocalTime()).ToString();
                                 break;
                             default:
                                 val = "N/A";
@@ -416,10 +414,8 @@ namespace Acn.Sntp
         {
             get
             {
-                DateTime time = ComputeDate(GetMilliSeconds(offReferenceTimestamp));
-                // Take care of the time zone
-                TimeSpan offspan = TimeZone.CurrentTimeZone.GetUtcOffset(DateTime.Now);
-                return time + offspan;
+                DateTime time = ComputeDate(GetMilliSeconds(offReferenceTimestamp), DateTimeKind.Utc);
+                return time.ToLocalTime();
             }
         }
 
@@ -434,7 +430,7 @@ namespace Acn.Sntp
             }
             set
             {
-                SetDate(offOriginateTimestamp, value);
+                SetDate(offOriginateTimestamp, value.ToUniversalTime());
             }
         }
 
@@ -445,14 +441,12 @@ namespace Acn.Sntp
         {
             get
             {
-                DateTime time = ComputeDate(GetMilliSeconds(offReceiveTimestamp));
-                // Take care of the time zone
-                TimeSpan offspan = TimeZone.CurrentTimeZone.GetUtcOffset(DateTime.Now);
-                return time + offspan;
+                DateTime time = ComputeDate(GetMilliSeconds(offReceiveTimestamp), DateTimeKind.Utc);
+                return time.ToLocalTime();
             }
             set
             {
-                SetDate(offReceiveTimestamp, value);
+                SetDate(offReceiveTimestamp, value.ToUniversalTime());
             }
         }
 
@@ -466,14 +460,12 @@ namespace Acn.Sntp
         {
             get
             {
-                DateTime time = ComputeDate(GetMilliSeconds(offTransmitTimestamp));
-                // Take care of the time zone
-                TimeSpan offspan = TimeZone.CurrentTimeZone.GetUtcOffset(DateTime.Now);
-                return time + offspan;
+                DateTime time = ComputeDate(GetMilliSeconds(offTransmitTimestamp), DateTimeKind.Utc);
+                return time.ToLocalTime();
             }
             set
             {
-                SetDate(offTransmitTimestamp, value);
+                SetDate(offTransmitTimestamp, value.ToUniversalTime());
             }
         }
 
@@ -518,10 +510,10 @@ namespace Acn.Sntp
         /// </summary>
         /// <param name="milliseconds">The milliseconds.</param>
         /// <returns></returns>
-        private DateTime ComputeDate(ulong milliseconds)
+        private DateTime ComputeDate(ulong milliseconds, DateTimeKind kind = DateTimeKind.Unspecified)
         {
             TimeSpan span = TimeSpan.FromMilliseconds((double)milliseconds);
-            DateTime time = new DateTime(1900, 1, 1);
+            DateTime time = new DateTime(1900, 1, 1, 0, 0, 0, 0, kind);
             time += span;
             return time;
         }
